@@ -5,100 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>shibabox</title>
 <style>
-    :root { --bg: #121212; --accent: #1DB954; --text: #FFF; --gray: #282828; }
+    :root { --bg: #121212; --accent: #1DB954; --text: #FFF; }
     body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
     
-    /* スタート画面 */
-    #start-overlay {
+    /* 共通オーバーレイスタイル */
+    .overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: #000; z-index: 10000;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
+        text-align: center;
+        padding: 20px;
     }
-    #start-overlay button {
-        padding: 20px 50px; font-size: 20px; border-radius: 50px;
-        background: var(--accent); border: none; font-weight: bold; cursor: pointer;
-        color: white; box-shadow: 0 0 20px rgba(29, 185, 84, 0.5);
-    }
-    #start-overlay p { margin-bottom: 20px; color: #aaa; }
-
-    /* 名前モーダル */
-    #name-modal {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.95); z-index: 9999;
-        display: none; flex-direction: column; align-items: center; justify-content: center;
-    }
-    #name-modal h2 { color: white; margin-bottom: 20px; font-size: 18px; }
-    #name-modal input {
-        width: 80%; max-width: 300px; padding: 15px; font-size: 16px;
+    .overlay h2 { margin-bottom: 20px; font-size: 24px; color: var(--accent); }
+    .overlay p { margin-bottom: 30px; color: #aaa; font-size: 14px; }
+    
+    .overlay input {
+        width: 100%; max-width: 250px; padding: 15px; font-size: 16px;
         border: 2px solid var(--accent); border-radius: 30px;
-        background: #333; color: white; text-align: center; margin-bottom: 20px; outline: none;
+        background: #222; color: white; text-align: center; margin-bottom: 20px; outline: none;
     }
-    #name-modal button {
-        padding: 12px 40px; font-size: 16px; border-radius: 30px;
+    .overlay button {
+        padding: 15px 50px; font-size: 18px; border-radius: 50px;
         background: var(--accent); border: none; font-weight: bold; cursor: pointer;
+        color: white; box-shadow: 0 0 15px rgba(29, 185, 84, 0.4);
     }
-
+    
+    /* プレイヤー周り（既存デザイン） */
+    header { text-align:center; padding:10px; font-weight:bold; font-size:12px; color:#666; letter-spacing: 1px; }
     #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; }
     #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-    
-    /* プログレスバー */
-    .progress-container {
-        padding: 10px 20px 0 20px;
-        background: #181818;
-        display: flex; flex-direction: column; gap: 5px;
-    }
-    input[type=range] {
-        -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer;
-    }
-    input[type=range]::-webkit-slider-runnable-track {
-        width: 100%; height: 4px; background: #555; border-radius: 2px;
-    }
-    input[type=range]::-webkit-slider-thumb {
-        -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%;
-        background: var(--accent); margin-top: -4px;
-    }
-    .time-display {
-        display: flex; justify-content: space-between;
-        font-size: 11px; color: #b3b3b3; font-variant-numeric: tabular-nums;
-    }
 
-    /* コントロールエリア */
-    .controls-main { 
-        display: flex; justify-content: space-between;
-        align-items: center; padding: 5px 20px 15px 20px; 
-        background: #181818; border-bottom: 1px solid #333; 
-    }
+    .progress-container { padding: 10px 20px 0 20px; background: #181818; display: flex; flex-direction: column; gap: 5px; }
+    input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
+    input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #555; border-radius: 2px; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: var(--accent); margin-top: -4px; }
+    .time-display { display: flex; justify-content: space-between; font-size: 11px; color: #b3b3b3; font-variant-numeric: tabular-nums; }
+
+    .controls-main { display: flex; justify-content: space-between; align-items: center; padding: 5px 20px 15px 20px; background: #181818; border-bottom: 1px solid #333; }
     .ctrl-group { display: flex; align-items: center; gap: 20px; }
-    
     .btn-ctrl { background: none; border: none; color: white; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .btn-ctrl:active { opacity: 0.7; }
     .play-btn { background: white; color: black; font-size: 24px; width: 60px; height: 60px; border-radius: 50%; }
-
-    /* ★改良：モードボタンのデザイン */
-    .btn-mode { 
-        position: relative; /* ドット表示用 */
-        font-size: 20px; 
-        color: #777; /* OFF: グレーで見やすく */
-        width: 40px; 
-        transition: all 0.2s;
-    }
-    /* ONの時のスタイル */
-    .btn-mode.active-mode { 
-        color: var(--accent); /* 緑色 */
-        text-shadow: 0 0 10px rgba(29, 185, 84, 0.4); /* ふんわり光る */
-    }
-    /* ONの時だけ下に小さな点を出す */
-    .btn-mode.active-mode::after {
-        content: '';
-        position: absolute;
-        bottom: -5px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 4px;
-        height: 4px;
-        background-color: var(--accent);
-        border-radius: 50%;
-    }
+    .btn-mode { position: relative; font-size: 20px; color: #777; width: 40px; transition: all 0.2s; }
+    .btn-mode.active-mode { color: var(--accent); text-shadow: 0 0 10px rgba(29, 185, 84, 0.4); }
+    .btn-mode.active-mode::after { content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background-color: var(--accent); border-radius: 50%; }
 
     #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; }
     .song { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #282828; background: var(--bg); transition: background 0.2s; }
@@ -122,27 +71,27 @@
 </head>
 <body>
 
-<div id="start-overlay">
-    <p>音楽を再生する準備ができました</p>
-    <button onclick="startApp()">タップして参加</button>
+<div id="room-create-overlay" class="overlay" style="display:none;">
+    <h2>shibabox</h2>
+    <p>好きな部屋の名前を決めてください</p>
+    <input type="text" id="room-name-input" placeholder="例: drive, party, shiba">
+    <button onclick="createRoom()">部屋を作る</button>
 </div>
 
-<div id="name-modal">
-    <h2>名前を教えてください</h2>
+<div id="join-overlay" class="overlay" style="display:none;">
+    <h2 id="room-title-display">Room: ???</h2>
+    <p>あなたの名前を教えてください</p>
     <input type="text" id="username-input" placeholder="例: shibaton">
-    <button onclick="saveName()">OK</button>
+    <button onclick="joinRoom()">参加する</button>
 </div>
 
-<header style="text-align:center; padding:10px; font-weight:bold; font-size:12px; color:#666; letter-spacing: 1px;">🎵 shibabox</header>
+<header id="header-title">🎵 shibabox</header>
 
 <div id="player-area"><div id="player"></div></div>
 
 <div class="progress-container">
     <input type="range" id="progressBar" value="0" min="0" max="100" step="1">
-    <div class="time-display">
-        <span id="currentTime">0:00</span>
-        <span id="duration">0:00</span>
-    </div>
+    <div class="time-display"><span id="currentTime">0:00</span><span id="duration">0:00</span></div>
 </div>
 
 <div class="controls-main">
@@ -167,53 +116,75 @@
     const socket = io();
     let player, isReady = false;
     let myName = '';
+    let currentRoomId = '';
     let isDragging = false;
     let lastState = { isPlaying: false, playlist: [] };
 
-    function startApp() {
-        document.getElementById('start-overlay').style.display = 'none';
-        const storedName = localStorage.getItem('shiba_username');
-        if(storedName) {
-            myName = storedName;
+    // --- 初期化処理 ---
+    window.onload = function() {
+        // URLから部屋名を取得 (例: shibabox.com/drive -> 'drive')
+        const path = window.location.pathname.substring(1); // 先頭の / を取る
+        
+        if (path) {
+            // 部屋名がある場合 -> 参加画面を表示
+            currentRoomId = path; // 日本語URL対策にdecodeURIしても良いがシンプルに
+            document.getElementById('room-title-display').innerText = `Room: ${currentRoomId}`;
+            document.getElementById('header-title').innerText = `🎵 shibabox / ${currentRoomId}`;
+            
+            // 名前が保存されていれば自動入力
+            const storedName = localStorage.getItem('shiba_username');
+            if(storedName) document.getElementById('username-input').value = storedName;
+            
+            document.getElementById('join-overlay').style.display = 'flex';
         } else {
-            document.getElementById('name-modal').style.display = 'flex';
+            // 部屋名がない場合 -> 作成画面を表示
+            document.getElementById('room-create-overlay').style.display = 'flex';
         }
-        if(player && isReady) {
-            if (lastState.isPlaying && lastState.playlist.length > 0) {
-                player.playVideo();
-            }
+    };
+
+    // 部屋を作る（URLを変えてリダイレクト）
+    function createRoom() {
+        const input = document.getElementById('room-name-input');
+        const roomName = input.value.trim();
+        if(roomName) {
+            // 画面遷移
+            window.location.href = '/' + roomName;
+        } else {
+            alert('部屋名を入力してください');
         }
     }
 
-    function saveName() {
+    // 部屋に参加する（サーバーに接続）
+    function joinRoom() {
         const input = document.getElementById('username-input');
         const name = input.value.trim();
-        if(name) {
-            myName = name;
-            localStorage.setItem('shiba_username', name);
-            document.getElementById('name-modal').style.display = 'none';
-        } else {
-            alert('名前を入力してください！');
+        if(!name) { alert('名前を入力してください'); return; }
+
+        myName = name;
+        localStorage.setItem('shiba_username', name);
+        document.getElementById('join-overlay').style.display = 'none';
+
+        // ★ここで初めてサーバーに「この部屋に入るよ」と伝える
+        socket.emit('join_room', currentRoomId);
+
+        // プレイヤー準備OKなら再生開始のチャンス
+        if(player && isReady && lastState.isPlaying && lastState.playlist.length > 0) {
+            player.playVideo();
         }
     }
 
+    // --- YouTube API ---
     const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
     document.body.appendChild(tag);
 
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('player', {
-            playerVars: { 
-                'playsinline': 1, 'controls': 0, 'rel': 0, 'origin': window.location.origin 
-            },
+            playerVars: { 'playsinline': 1, 'controls': 0, 'rel': 0, 'origin': window.location.origin },
             events: { 
                 'onReady': () => { isReady=true; startProgressLoop(); }, 
-                'onStateChange': onStateChange
+                'onStateChange': e => { if(e.data===0) socket.emit('song_ended'); }
             }
         });
-    }
-
-    function onStateChange(e) {
-        if(e.data === 0) socket.emit('song_ended');
     }
 
     function startProgressLoop() {
@@ -230,29 +201,24 @@
             document.getElementById('duration').innerText = formatTime(duration);
         }, 500);
     }
-
-    function formatTime(seconds) {
-        if(!seconds) return "0:00";
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
-        return `${m}:${s < 10 ? '0'+s : s}`;
+    function formatTime(s) {
+        if(!s) return "0:00";
+        const m = Math.floor(s / 60);
+        const sc = Math.floor(s % 60);
+        return `${m}:${sc < 10 ? '0'+sc : sc}`;
     }
-
     const range = document.getElementById('progressBar');
     range.addEventListener('mousedown', () => isDragging = true);
     range.addEventListener('touchstart', () => isDragging = true);
     range.addEventListener('change', (e) => {
         isDragging = false;
-        const seekTo = e.target.value;
-        player.seekTo(seekTo);
-        socket.emit('seek', seekTo);
+        player.seekTo(e.target.value);
+        socket.emit('seek', e.target.value);
     });
 
+    // --- 操作 ---
     async function add() {
-        if(!myName) {
-            alert("エラー: 名前が設定されていません。ページを再読み込みしてください。");
-            return;
-        }
+        if(!myName) return;
         const input = document.getElementById('urlInput');
         const btn = document.getElementById('addBtn');
         const url = input.value;
@@ -261,60 +227,49 @@
         else if(url.includes('youtu.be/')) vId = url.split('youtu.be/')[1].split('?')[0];
 
         if(vId) { 
-            btn.disabled = true;
-            btn.innerText = "取得中...";
+            btn.disabled = true; btn.innerText = "...";
             try {
-                const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vId}`);
-                const data = await response.json();
-                const title = data.title || `Track (${vId})`;
-                socket.emit('add_song', { id: vId, title: title, user: myName });
-                input.value = '';
-                input.blur();
+                const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vId}`);
+                const data = await res.json();
+                socket.emit('add_song', { id: vId, title: data.title || `Track (${vId})`, user: myName });
+                input.value = ''; input.blur();
             } catch (e) {
                 socket.emit('add_song', { id: vId, title: `Track (${vId})`, user: myName });
             } finally {
-                btn.disabled = false;
-                btn.innerText = "追加";
+                btn.disabled = false; btn.innerText = "追加";
             }
         }
     }
 
     function sendCtrl(type) { socket.emit('control', { type }); }
-    
     function togglePlay() {
         const btn = document.getElementById('playBtn');
-        if(btn.innerText === '▶') sendCtrl('play');
-        else sendCtrl('pause');
+        if(btn.innerText === '▶') sendCtrl('play'); else sendCtrl('pause');
     }
-
     function toggleMode(mode) { socket.emit('toggle_mode', mode); }
     function editList(action, index) { socket.emit('edit_list', { action, index }); }
     function playSpecific(index) { socket.emit('play_specific', index); }
 
+    // --- 受信 ---
     socket.on('init_state', d => {
         lastState = d;
         renderList(d.playlist);
         highlight(d.currentSongIndex);
         updateModes(d.isLoop, d.isShuffle);
-        
-        if(document.getElementById('start-overlay').style.display === 'none') {
+        if(document.getElementById('join-overlay').style.display === 'none') {
             if(d.playlist.length > 0) {
                  playVideo(d.playlist[d.currentSongIndex].id);
                  if(d.isPlaying) document.getElementById('playBtn').innerText = '⏸';
             }
         }
     });
-
-    socket.on('update_playlist', list => { lastState.playlist = list; renderList(list); });
-    socket.on('update_index', idx => highlight(idx));
+    socket.on('update_playlist', l => { lastState.playlist = l; renderList(l); });
+    socket.on('update_index', i => highlight(i));
     socket.on('mode_update', d => updateModes(d.isLoop, d.isShuffle));
-
     socket.on('change_song', d => {
-        playVideo(d.videoId);
-        highlight(d.index);
+        playVideo(d.videoId); highlight(d.index);
         document.getElementById('playBtn').innerText = '⏸';
     });
-
     socket.on('sync_action', d => {
         lastState.isPlaying = (d.type === 'play');
         if(!isReady) return;
@@ -322,18 +277,15 @@
         if(d.type === 'pause') { player.pauseVideo(); document.getElementById('playBtn').innerText = '▶'; }
         if(d.type === 'stop') { player.stopVideo(); document.getElementById('playBtn').innerText = '▶'; }
     });
+    socket.on('sync_seek', t => { if(isReady) player.seekTo(t); });
+
+    function playVideo(id) { if(isReady) player.loadVideoById(id); }
     
-    socket.on('sync_seek', (time) => { if(isReady) player.seekTo(time); });
-
-    function playVideo(id) {
-        if(isReady) player.loadVideoById(id);
-    }
-
-    function updateModes(loop, shuffle) {
-        const btnLoop = document.getElementById('btn-loop');
-        const btnShuffle = document.getElementById('btn-shuffle');
-        if(loop) btnLoop.classList.add('active-mode'); else btnLoop.classList.remove('active-mode');
-        if(shuffle) btnShuffle.classList.add('active-mode'); else btnShuffle.classList.remove('active-mode');
+    function updateModes(l, s) {
+        const bl = document.getElementById('btn-loop');
+        const bs = document.getElementById('btn-shuffle');
+        if(l) bl.classList.add('active-mode'); else bl.classList.remove('active-mode');
+        if(s) bs.classList.add('active-mode'); else bs.classList.remove('active-mode');
     }
 
     function renderList(list) {
@@ -353,14 +305,10 @@
             </div>
         `).join('');
     }
-
-    function highlight(index) {
+    function highlight(idx) {
         document.querySelectorAll('.song').forEach(e => e.classList.remove('active'));
-        const el = document.getElementById(`s-${index}`);
-        if(el) { 
-            el.classList.add('active'); 
-            el.scrollIntoView({ behavior:'smooth', block:'center' });
-        }
+        const el = document.getElementById(`s-${idx}`);
+        if(el) { el.classList.add('active'); el.scrollIntoView({ behavior:'smooth', block:'center' }); }
     }
 </script>
 </body>
