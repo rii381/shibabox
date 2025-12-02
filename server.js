@@ -9,31 +9,33 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// データの管理
+// データ管理（曲リスト）
 let playlist = []; 
 let currentSongIndex = 0;
 let isPlaying = false;
 
 io.on('connection', (socket) => {
-    // 1. 接続時に今の状態を教える
+    // 接続時に現在の状態を送信
     socket.emit('init_state', {
         playlist,
         currentSongIndex,
         isPlaying
     });
 
-    // 2. 曲の追加
-    socket.on('add_song', (videoId) => {
-        playlist.push({ id: videoId });
+    // 曲の追加（曲名・ユーザー名も一緒に保存）
+    socket.on('add_song', (data) => {
+        // dataの中身: { id: '...', title: '曲名', user: 'ユーザー名' }
+        playlist.push(data);
         io.emit('update_playlist', playlist);
-        // 最初の1曲目なら自動でセット
+        
+        // もしリストが空だったなら、追加された曲をセット
         if (playlist.length === 1) {
             currentSongIndex = 0;
-            io.emit('change_song', { index: 0, videoId: videoId });
+            io.emit('change_song', { index: 0, videoId: playlist[0].id });
         }
     });
 
-    // 3. 再生・一時停止・スキップ
+    // 再生・停止・スキップ操作
     socket.on('control', (action) => {
         switch(action.type) {
             case 'play':
@@ -61,13 +63,24 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 4. 並べ替え・削除
+    // リストの曲をタップして再生
+    socket.on('play_specific', (index) => {
+        if (index >= 0 && index < playlist.length) {
+            currentSongIndex = index;
+            isPlaying = true;
+            io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+        }
+    });
+
+    // リスト編集（並べ替え・削除）
     socket.on('edit_list', (data) => {
         const { action, index } = data;
         
         if (action === 'delete') {
             playlist.splice(index, 1);
+            // 再生中の曲より前を消したらインデックスをずらす
             if (index < currentSongIndex) currentSongIndex--;
+            // 再生中の曲そのものを消したら止める
             if (index === currentSongIndex) {
                 isPlaying = false;
                 io.emit('sync_action', { type: 'stop' });
@@ -86,7 +99,7 @@ io.on('connection', (socket) => {
         io.emit('update_index', currentSongIndex);
     });
 
-    // 5. 曲終了時
+    // 曲が終わったとき
     socket.on('song_ended', () => {
         if (currentSongIndex + 1 < playlist.length) {
             currentSongIndex++;
