@@ -6,14 +6,14 @@
 <title>shibabox</title>
 <style>
     :root { --bg: #121212; --accent: #1DB954; --text: #FFF; }
-    body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    /* 修正: heightを100dvhにしてスマホのアドレスバー対策 */
+    body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
     
-    /* オーバーレイ（共通） */
     .overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: #000; z-index: 10000;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        text-align: center; padding: 20px; box-sizing: border-box; /* 修正: パディングを含める */
+        text-align: center; padding: 20px; box-sizing: border-box;
     }
     .overlay h2 { margin-bottom: 10px; font-size: 24px; color: var(--accent); }
     .overlay .room-id { font-size: 32px; font-weight: bold; margin-bottom: 20px; color: white; letter-spacing: 2px; word-break: break-all; }
@@ -36,40 +36,20 @@
         padding: 10px 20px !important; display: flex; align-items: center; gap: 5px;
     }
 
-    /* ★修正：ヘッダー周り（崩れ防止） */
     header { 
         display: flex; justify-content: space-between; align-items: center;
         padding: 10px 15px; background: #121212; border-bottom: 1px solid #222;
-        flex-shrink: 0; /* 潰れないようにする */
-        z-index: 500; /* 他の要素より手前に表示 */
-        position: relative;
-        height: 50px; /* 高さ固定 */
-        box-sizing: border-box;
+        flex-shrink: 0; z-index: 500; position: relative; height: 50px; box-sizing: border-box;
     }
-    
-    .header-left {
-        display: flex; align-items: center; 
-        overflow: hidden; /* 長すぎる文字は隠す */
-        white-space: nowrap;
-        margin-right: 10px;
-    }
-    
+    .header-left { display: flex; align-items: center; overflow: hidden; white-space: nowrap; margin-right: 10px; }
     .header-logo { font-weight:bold; font-size:14px; color:#aaa; letter-spacing: 1px; flex-shrink: 0; }
-    .header-room { 
-        color: var(--accent); margin-left: 5px; 
-        overflow: hidden; text-overflow: ellipsis; /* 長すぎたら...にする */
-    }
-    
-    /* ★修正：共有ボタンが消えないようにする */
+    .header-room { color: var(--accent); margin-left: 5px; overflow: hidden; text-overflow: ellipsis; }
     .btn-share-header {
         background: #333; color: white; border: none; padding: 5px 12px;
         border-radius: 15px; font-size: 12px; cursor: pointer; 
-        display: flex; align-items: center; gap: 4px;
-        flex-shrink: 0; /* 画面が狭くても絶対に縮めない */
-        white-space: nowrap;
+        display: flex; align-items: center; gap: 4px; flex-shrink: 0; white-space: nowrap;
     }
 
-    /* プレイヤー */
     #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; z-index: 10;}
     #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
@@ -87,6 +67,7 @@
     .btn-mode.active-mode { color: var(--accent); text-shadow: 0 0 10px rgba(29, 185, 84, 0.4); }
     .btn-mode.active-mode::after { content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background-color: var(--accent); border-radius: 50%; }
 
+    /* 修正: position: relativeを追加してスクロール基準にする */
     #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; position: relative; z-index: 5; }
     .song { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #282828; background: var(--bg); transition: background 0.2s; }
     .song.active { background: #1a1a1a; border-left: 4px solid var(--accent); }
@@ -119,9 +100,7 @@
 <div id="join-overlay" class="overlay" style="display:none;">
     <h2>ROOM</h2>
     <div id="room-title-display" class="room-id">???</div>
-    
     <button class="btn-share-sub" onclick="shareUrl()">🔗 URLを友達に送る</button>
-    
     <p style="margin-top:20px;">あなたの名前を教えてください</p>
     <input type="text" id="username-input" placeholder="例: shibaton">
     <button onclick="joinRoom()">参加する</button>
@@ -169,21 +148,16 @@
     let lastState = { isPlaying: false, playlist: [] };
 
     window.onload = function() {
-        // 末尾の/を削除して取得
         let path = window.location.pathname;
-        if (path.endsWith('/')) {
-             path = path.slice(0, -1);
-        }
-        const roomId = path.substring(1); // 先頭の / を取る
+        if (path.endsWith('/')) path = path.slice(0, -1);
+        const roomId = path.substring(1);
         
         if (roomId) {
             currentRoomId = decodeURIComponent(roomId);
             document.getElementById('room-title-display').innerText = currentRoomId;
             document.getElementById('header-room-name').innerText = "/ " + currentRoomId;
-            
             const storedName = localStorage.getItem('shiba_username');
             if(storedName) document.getElementById('username-input').value = storedName;
-            
             document.getElementById('join-overlay').style.display = 'flex';
         } else {
             document.getElementById('room-create-overlay').style.display = 'flex';
@@ -193,11 +167,8 @@
     function createRoom() {
         const input = document.getElementById('room-name-input');
         const roomName = input.value.trim();
-        if(roomName) {
-            window.location.href = '/' + encodeURIComponent(roomName);
-        } else {
-            alert('部屋名を入力してください');
-        }
+        if(roomName) window.location.href = '/' + encodeURIComponent(roomName);
+        else alert('部屋名を入力してください');
     }
 
     async function shareUrl() {
@@ -207,16 +178,11 @@
             text: `shibaboxの部屋「${currentRoomId}」に招待されました！`,
             url: url,
         };
-
         if (navigator.share) {
             try { await navigator.share(shareData); } catch (err) {}
         } else {
-            try {
-                await navigator.clipboard.writeText(url);
-                alert('URLをコピーしました！\n' + url);
-            } catch (err) {
-                alert('URL: ' + url);
-            }
+            try { await navigator.clipboard.writeText(url); alert('URLをコピーしました！\n' + url); } 
+            catch (err) { alert('URL: ' + url); }
         }
     }
 
@@ -224,16 +190,11 @@
         const input = document.getElementById('username-input');
         const name = input.value.trim();
         if(!name) { alert('名前を入力してください'); return; }
-
         myName = name;
         localStorage.setItem('shiba_username', name);
         document.getElementById('join-overlay').style.display = 'none';
-
         socket.emit('join_room', currentRoomId);
-
-        if(player && isReady && lastState.isPlaying && lastState.playlist.length > 0) {
-            player.playVideo();
-        }
+        if(player && isReady && lastState.isPlaying && lastState.playlist.length > 0) player.playVideo();
     }
 
     const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
@@ -365,10 +326,25 @@
             </div>
         `).join('');
     }
-    function highlight(idx) {
+
+    // ★修正: リスト内だけをスクロールさせる安全な方法に変更
+    function highlight(index) {
         document.querySelectorAll('.song').forEach(e => e.classList.remove('active'));
-        const el = document.getElementById(`s-${idx}`);
-        if(el) { el.classList.add('active'); el.scrollIntoView({ behavior:'smooth', block:'center' }); }
+        const el = document.getElementById(`s-${index}`);
+        if(el) { 
+            el.classList.add('active'); 
+            // 画面全体を巻き込まないように手動でリスト内スクロール計算をする
+            const container = document.getElementById('list-area');
+            const elTop = el.offsetTop;
+            const containerHeight = container.clientHeight;
+            // 真ん中に来るように計算
+            const targetScroll = elTop - (containerHeight / 2) + (el.clientHeight / 2);
+            
+            container.scrollTo({
+                top: targetScroll,
+                behavior: 'smooth'
+            });
+        }
     }
 </script>
 </body>
