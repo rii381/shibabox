@@ -8,6 +8,19 @@
     :root { --bg: #121212; --accent: #1DB954; --text: #FFF; --gray: #282828; }
     body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
     
+    /* ★追加：スタート画面（オーバーレイ） */
+    #start-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #000; z-index: 10000;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    #start-overlay button {
+        padding: 20px 50px; font-size: 20px; border-radius: 50px;
+        background: var(--accent); border: none; font-weight: bold; cursor: pointer;
+        color: white; box-shadow: 0 0 20px rgba(29, 185, 84, 0.5);
+    }
+    #start-overlay p { margin-bottom: 20px; color: #aaa; }
+
     /* 名前モーダル */
     #name-modal {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -25,10 +38,10 @@
         background: var(--accent); border: none; font-weight: bold; cursor: pointer;
     }
 
+    /* プレイヤー */
     #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; }
     #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     
-    /* プログレスバー */
     .progress-container {
         padding: 10px 20px 0 20px;
         background: #181818;
@@ -49,25 +62,18 @@
         font-size: 11px; color: #b3b3b3; font-variant-numeric: tabular-nums;
     }
 
-    /* 操作ボタンエリア */
     .controls-main { 
-        display: flex; justify-content: space-between; /* 左右に配置 */
+        display: flex; justify-content: space-between;
         align-items: center; padding: 5px 20px 15px 20px; 
         background: #181818; border-bottom: 1px solid #333; 
     }
-    
-    /* 再生系ボタンのグループ */
     .ctrl-group { display: flex; align-items: center; gap: 20px; }
-
     .btn-ctrl { background: none; border: none; color: white; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .btn-ctrl:active { opacity: 0.7; }
     .play-btn { background: white; color: black; font-size: 24px; width: 60px; height: 60px; border-radius: 50%; }
-    
-    /* ★追加：モードボタン（シャッフル・ループ） */
-    .btn-mode { font-size: 20px; color: #555; width: 40px; } /* OFFの色 */
-    .btn-mode.active-mode { color: var(--accent); text-shadow: 0 0 5px rgba(29, 185, 84, 0.5); } /* ONの色 */
+    .btn-mode { font-size: 20px; color: #555; width: 40px; }
+    .btn-mode.active-mode { color: var(--accent); text-shadow: 0 0 5px rgba(29, 185, 84, 0.5); }
 
-    /* リスト */
     #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; }
     .song { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #282828; background: var(--bg); transition: background 0.2s; }
     .song.active { background: #1a1a1a; border-left: 4px solid var(--accent); }
@@ -81,7 +87,6 @@
     .btn-sm { background: #333; border: none; color: #ccc; width: 32px; height: 32px; border-radius: 4px; font-size: 14px; cursor: pointer; }
     .btn-del { color: #ff5555; background: #332222; }
     
-    /* 追加バー */
     #add-bar { position: fixed; bottom: 0; width: 100%; background: #181818; padding: 15px; display: flex; gap: 10px; border-top: 1px solid #333; z-index: 100; }
     #urlInput { flex: 1; background: #333; border: none; padding: 12px; border-radius: 20px; color: #fff; outline: none; }
     .btn-add { background: var(--accent); border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; white-space: nowrap; }
@@ -91,10 +96,14 @@
 </head>
 <body>
 
-<div id="name-modal">
-    <h2>名前を教えてください</h2>
+<div id="start-overlay">
+    <p>音楽を再生する準備ができました</p>
+    <button onclick="startApp()">タップして参加</button>
+</div>
+
+<div id="name-modal" style="display:none;"> <h2>名前を教えてください</h2>
     <input type="text" id="username-input" placeholder="例: shibaton">
-    <button onclick="saveName()">スタート！</button>
+    <button onclick="saveName()">OK</button>
 </div>
 
 <header style="text-align:center; padding:10px; font-weight:bold; font-size:12px; color:#666; letter-spacing: 1px;">🎵 shibabox</header>
@@ -111,13 +120,11 @@
 
 <div class="controls-main">
     <button class="btn-ctrl btn-mode" id="btn-shuffle" onclick="toggleMode('shuffle')">🔀</button>
-    
     <div class="ctrl-group">
         <button class="btn-ctrl" onclick="sendCtrl('prev')">⏮</button>
         <button class="btn-ctrl play-btn" id="playBtn" onclick="togglePlay()">▶</button>
         <button class="btn-ctrl" onclick="sendCtrl('next')">⏭</button>
     </div>
-    
     <button class="btn-ctrl btn-mode" id="btn-loop" onclick="toggleMode('loop')">🔁</button>
 </div>
 
@@ -134,12 +141,34 @@
     let player, isReady = false;
     let myName = '';
     let isDragging = false;
-
-    const storedName = localStorage.getItem('shiba_username');
-    if(storedName) {
-        document.getElementById('username-input').value = storedName;
-    }
     
+    // サーバーの状態を一時保存する変数
+    let lastState = { isPlaying: false, playlist: [] };
+
+    // ★追加：スタートボタンを押した時の処理
+    function startApp() {
+        document.getElementById('start-overlay').style.display = 'none';
+        
+        // 名前入力が必要なら表示
+        const storedName = localStorage.getItem('shiba_username');
+        if(storedName) {
+            myName = storedName;
+        } else {
+            document.getElementById('name-modal').style.display = 'flex';
+        }
+
+        // プレイヤーのロックを解除（これが重要！）
+        if(player && isReady) {
+            // もしサーバー側ですでに再生中なら、それに合わせて再生開始
+            if (lastState.isPlaying && lastState.playlist.length > 0) {
+                player.playVideo();
+            } else {
+                // 再生中でなくても、一度空再生命令を出してブラウザに「再生の意思」を伝える
+                // (エラー回避のためのハックですが、今回はシンプルにplayVideoだけにします)
+            }
+        }
+    }
+
     function saveName() {
         const input = document.getElementById('username-input');
         const name = input.value.trim();
@@ -157,16 +186,28 @@
 
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('player', {
-            playerVars: { 'playsinline': 1, 'controls': 0, 'rel': 0 },
+            // ★修正：originを追加（エラー対策）
+            playerVars: { 
+                'playsinline': 1, 
+                'controls': 0, 
+                'rel': 0,
+                'origin': window.location.origin 
+            },
             events: { 
                 'onReady': () => { isReady=true; startProgressLoop(); }, 
-                'onStateChange': onStateChange 
+                'onStateChange': onStateChange,
+                'onError': onPlayerError // エラー監視
             }
         });
     }
 
     function onStateChange(e) {
         if(e.data === 0) socket.emit('song_ended');
+    }
+
+    // エラーが出た時の処理
+    function onPlayerError(e) {
+        console.log("YouTube Error:", e.data);
     }
 
     function startProgressLoop() {
@@ -240,36 +281,30 @@
         else sendCtrl('pause');
     }
 
-    // ★追加: モード切替送信
-    function toggleMode(mode) {
-        socket.emit('toggle_mode', mode);
-    }
+    function toggleMode(mode) { socket.emit('toggle_mode', mode); }
+    function editList(action, index) { socket.emit('edit_list', { action, index }); }
+    function playSpecific(index) { socket.emit('play_specific', index); }
 
-    function editList(action, index) {
-        socket.emit('edit_list', { action, index });
-    }
-    function playSpecific(index) {
-        socket.emit('play_specific', index);
-    }
-
-    // 受信処理
+    // --- 受信処理 ---
     socket.on('init_state', d => {
+        lastState = d; // 状態を保存
         renderList(d.playlist);
         highlight(d.currentSongIndex);
-        updateModes(d.isLoop, d.isShuffle); // 初期モード表示
-        if(d.playlist.length > 0) {
-             playVideo(d.playlist[d.currentSongIndex].id);
-             if(d.isPlaying) document.getElementById('playBtn').innerText = '⏸';
+        updateModes(d.isLoop, d.isShuffle);
+        
+        // スタートボタンが押されるまでは勝手に再生しない
+        // (ただし、PCなど制限がない環境では動くこともある)
+        if(document.getElementById('start-overlay').style.display === 'none') {
+            if(d.playlist.length > 0) {
+                 playVideo(d.playlist[d.currentSongIndex].id);
+                 if(d.isPlaying) document.getElementById('playBtn').innerText = '⏸';
+            }
         }
     });
 
-    socket.on('update_playlist', list => renderList(list));
+    socket.on('update_playlist', list => { lastState.playlist = list; renderList(list); });
     socket.on('update_index', idx => highlight(idx));
-    
-    // ★追加: モード更新受信
-    socket.on('mode_update', d => {
-        updateModes(d.isLoop, d.isShuffle);
-    });
+    socket.on('mode_update', d => updateModes(d.isLoop, d.isShuffle));
 
     socket.on('change_song', d => {
         playVideo(d.videoId);
@@ -278,6 +313,7 @@
     });
 
     socket.on('sync_action', d => {
+        lastState.isPlaying = (d.type === 'play');
         if(!isReady) return;
         if(d.type === 'play') { player.playVideo(); document.getElementById('playBtn').innerText = '⏸'; }
         if(d.type === 'pause') { player.pauseVideo(); document.getElementById('playBtn').innerText = '▶'; }
@@ -290,16 +326,11 @@
         if(isReady) player.loadVideoById(id);
     }
 
-    // モードボタンの見た目更新
     function updateModes(loop, shuffle) {
         const btnLoop = document.getElementById('btn-loop');
         const btnShuffle = document.getElementById('btn-shuffle');
-        
-        if(loop) btnLoop.classList.add('active-mode');
-        else btnLoop.classList.remove('active-mode');
-        
-        if(shuffle) btnShuffle.classList.add('active-mode');
-        else btnShuffle.classList.remove('active-mode');
+        if(loop) btnLoop.classList.add('active-mode'); else btnLoop.classList.remove('active-mode');
+        if(shuffle) btnShuffle.classList.add('active-mode'); else btnShuffle.classList.remove('active-mode');
     }
 
     function renderList(list) {
