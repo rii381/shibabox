@@ -46,4 +46,60 @@ io.on('connection', (socket) => {
                 break;
             case 'next':
                 if (currentSongIndex + 1 < playlist.length) {
-                    current
+                    currentSongIndex++;
+                    isPlaying = true;
+                    io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+                }
+                break;
+            case 'prev':
+                if (currentSongIndex > 0) {
+                    currentSongIndex--;
+                    isPlaying = true;
+                    io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+                }
+                break;
+        }
+    });
+
+    // 4. 並べ替え・削除
+    socket.on('edit_list', (data) => {
+        const { action, index } = data;
+        
+        if (action === 'delete') {
+            playlist.splice(index, 1);
+            if (index < currentSongIndex) currentSongIndex--;
+            if (index === currentSongIndex) {
+                isPlaying = false;
+                io.emit('sync_action', { type: 'stop' });
+            }
+        } else if (action === 'up' && index > 0) {
+            [playlist[index], playlist[index-1]] = [playlist[index-1], playlist[index]];
+            if (currentSongIndex === index) currentSongIndex--;
+            else if (currentSongIndex === index - 1) currentSongIndex++;
+        } else if (action === 'down' && index < playlist.length - 1) {
+            [playlist[index], playlist[index+1]] = [playlist[index+1], playlist[index]];
+            if (currentSongIndex === index) currentSongIndex++;
+            else if (currentSongIndex === index + 1) currentSongIndex--;
+        }
+        
+        io.emit('update_playlist', playlist);
+        io.emit('update_index', currentSongIndex);
+    });
+
+    // 5. 曲終了時
+    socket.on('song_ended', () => {
+        if (currentSongIndex + 1 < playlist.length) {
+            currentSongIndex++;
+            isPlaying = true;
+            io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+        } else {
+            isPlaying = false;
+            io.emit('sync_action', { type: 'stop' });
+        }
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server running at port ${PORT}`);
+});
