@@ -6,7 +6,6 @@
 <title>shibabox</title>
 <style>
     :root { --bg: #121212; --accent: #1DB954; --text: #FFF; }
-    /* 修正: heightを100dvhにしてスマホのアドレスバー対策 */
     body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
     
     .overlay {
@@ -67,7 +66,6 @@
     .btn-mode.active-mode { color: var(--accent); text-shadow: 0 0 10px rgba(29, 185, 84, 0.4); }
     .btn-mode.active-mode::after { content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background-color: var(--accent); border-radius: 50%; }
 
-    /* 修正: position: relativeを追加してスクロール基準にする */
     #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; position: relative; z-index: 5; }
     .song { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #282828; background: var(--bg); transition: background 0.2s; }
     .song.active { background: #1a1a1a; border-left: 4px solid var(--accent); }
@@ -82,6 +80,7 @@
     .btn-del { color: #ff5555; background: #332222; }
     
     #add-bar { position: fixed; bottom: 0; width: 100%; background: #181818; padding: 15px; display: flex; gap: 10px; border-top: 1px solid #333; z-index: 100; box-sizing: border-box; }
+    /* ★修正: formタグのようにEnterで送信できるように修正 */
     #urlInput { flex: 1; background: #333; border: none; padding: 12px; border-radius: 20px; color: #fff; outline: none; min-width: 0; }
     .btn-add { background: var(--accent); border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
     .btn-add:disabled { background: #555; cursor: wait; }
@@ -134,7 +133,7 @@
 <div id="list-area"><div id="playlist"></div></div>
 
 <div id="add-bar">
-    <input type="text" id="urlInput" placeholder="URLを貼り付け">
+    <input type="text" id="urlInput" placeholder="URLを貼り付け" onkeydown="if(event.key === 'Enter') add()">
     <button class="btn-add" id="addBtn" onclick="add()">追加</button>
 </div>
 
@@ -173,17 +172,9 @@
 
     async function shareUrl() {
         const url = window.location.href;
-        const shareData = {
-            title: 'shibabox',
-            text: `shibaboxの部屋「${currentRoomId}」に招待されました！`,
-            url: url,
-        };
-        if (navigator.share) {
-            try { await navigator.share(shareData); } catch (err) {}
-        } else {
-            try { await navigator.clipboard.writeText(url); alert('URLをコピーしました！\n' + url); } 
-            catch (err) { alert('URL: ' + url); }
-        }
+        const shareData = { title: 'shibabox', text: `shibabox「${currentRoomId}」に招待！`, url: url };
+        if (navigator.share) { try { await navigator.share(shareData); } catch (e) {} }
+        else { try { await navigator.clipboard.writeText(url); alert('URLをコピーしました'); } catch (e) { alert('URL: ' + url); } }
     }
 
     function joinRoom() {
@@ -239,14 +230,21 @@
         socket.emit('seek', e.target.value);
     });
 
+    // ★修正: URLのID抽出ロジックを最強のものに変更（正規表現）
+    function getVideoId(url) {
+        const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+        const match = url.match(regex);
+        return match ? match[1] : null;
+    }
+
     async function add() {
         if(!myName) return;
         const input = document.getElementById('urlInput');
         const btn = document.getElementById('addBtn');
         const url = input.value;
-        let vId = '';
-        if(url.includes('v=')) vId = url.split('v=')[1].split('&')[0];
-        else if(url.includes('youtu.be/')) vId = url.split('youtu.be/')[1].split('?')[0];
+        
+        // ★新しいロジックでID取得
+        const vId = getVideoId(url);
 
         if(vId) { 
             btn.disabled = true; btn.innerText = "...";
@@ -256,10 +254,16 @@
                 socket.emit('add_song', { id: vId, title: data.title || `Track (${vId})`, user: myName });
                 input.value = ''; input.blur();
             } catch (e) {
+                // Fetch失敗時もIDさえあれば追加する
                 socket.emit('add_song', { id: vId, title: `Track (${vId})`, user: myName });
+                input.value = ''; input.blur();
             } finally {
                 btn.disabled = false; btn.innerText = "追加";
             }
+        } else {
+            // IDが見つからない場合はアラート
+            alert('YouTubeのURLを正しく認識できませんでした。\n別の形式のURLを試してみてください。');
+            input.value = '';
         }
     }
 
@@ -326,24 +330,16 @@
             </div>
         `).join('');
     }
-
-    // ★修正: リスト内だけをスクロールさせる安全な方法に変更
-    function highlight(index) {
+    function highlight(idx) {
         document.querySelectorAll('.song').forEach(e => e.classList.remove('active'));
-        const el = document.getElementById(`s-${index}`);
+        const el = document.getElementById(`s-${idx}`);
         if(el) { 
             el.classList.add('active'); 
-            // 画面全体を巻き込まないように手動でリスト内スクロール計算をする
             const container = document.getElementById('list-area');
             const elTop = el.offsetTop;
             const containerHeight = container.clientHeight;
-            // 真ん中に来るように計算
             const targetScroll = elTop - (containerHeight / 2) + (el.clientHeight / 2);
-            
-            container.scrollTo({
-                top: targetScroll,
-                behavior: 'smooth'
-            });
+            container.scrollTo({ top: targetScroll, behavior: 'smooth' });
         }
     }
 </script>
