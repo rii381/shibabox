@@ -7,142 +7,175 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// 静的ファイル（CSSやJS）はpublicフォルダから探す
 app.use(express.static(path.join(__dirname, 'public')));
 
-// データ管理
-let playlist = []; 
-let currentSongIndex = 0;
-let isPlaying = false;
-// ★追加: モード管理
-let isLoop = false;
-let isShuffle = false;
+// ★重要: どんなURL（例: /drive, /party）でアクセスしても index.html を返す設定
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 部屋ごとのデータを管理する箱
+// 例: rooms['drive'] = { playlist: [], ... }
+const rooms = {};
 
 io.on('connection', (socket) => {
-    // 接続時に現在の状態を送信（モード情報も追加）
-    socket.emit('init_state', {
-        playlist,
-        currentSongIndex,
-        isPlaying,
-        isLoop,
-        isShuffle
+    
+    // ★ 部屋に参加する処理
+    socket.on('join_room', (roomId) => {
+        // IDがない場合は何もしない
+        if (!roomId) return;
+
+        socket.join(roomId); // Socket.ioの機能でグループ分け
+        socket.data.roomId = roomId; // この通信がどの部屋か覚えておく
+
+        // まだ部屋がなければ作る（初期化）
+        if (!rooms[roomId]) {
+            rooms[roomId] = {
+                playlist: [],
+                currentSongIndex: 0,
+                isPlaying: false,
+                isLoop: false,
+                isShuffle: false
+            };
+        }
+
+        // その部屋の今の状態を、参加した人にだけ教える
+        socket.emit('init_state', rooms[roomId]);
     });
 
-    // 曲の追加
+    // --- 以下、操作はすべて「その部屋（roomId）」に対して行う ---
+
     socket.on('add_song', (data) => {
-        playlist.push(data);
-        io.emit('update_playlist', playlist);
-        if (playlist.length === 1) {
-            currentSongIndex = 0;
-            io.emit('change_song', { index: 0, videoId: playlist[0].id });
+        const roomId = socket.data.roomId;
+        const room = rooms[roomId];
+        if (!room) return;
+
+        room.playlist.push(data);
+        io.to(roomId).emit('update_playlist', room.playlist);
+
+        if (room.playlist.length === 1) {
+            room.currentSongIndex = 0;
+            io.to(roomId).emit('change_song', { index: 0, videoId: room.playlist[0].id });
         }
     });
 
-    // ★追加: モード切替
     socket.on('toggle_mode', (mode) => {
-        if (mode === 'loop') isLoop = !isLoop;
-        if (mode === 'shuffle') isShuffle = !isShuffle;
-        // 全員に新しい状態を通知
-        io.emit('mode_update', { isLoop, isShuffle });
+        const roomId = socket.data.roomId;
+        const room = rooms[roomId];
+        if (!room) return;
+
+        if (mode === 'loop') room.isLoop = !room.isLoop;
+        if (mode === 'shuffle') room.isShuffle = !room.isShuffle;
+        io.to(roomId).emit('mode_update', { isLoop: room.isLoop, isShuffle: room.isShuffle });
     });
 
-    // 再生・停止・スキップ操作
     socket.on('control', (action) => {
+        const roomId = socket.data.roomId;
+        const room = rooms[roomId];
+        if (!room) return;
+
         switch(action.type) {
             case 'play':
-                isPlaying = true;
-                io.emit('sync_action', { type: 'play' });
+                room.isPlaying = true;
+                io.to(roomId).emit('sync_action', { type: 'play' });
                 break;
             case 'pause':
-                isPlaying = false;
-                io.emit('sync_action', { type: 'pause' });
+                room.isPlaying = false;
+                io.to(roomId).emit('sync_action', { type: 'pause' });
                 break;
             case 'next':
-                playNextSong(); // ★ロジックを共通関数化
+                playNextSong(roomId);
                 break;
             case 'prev':
-                if (currentSongIndex > 0) {
-                    currentSongIndex--;
-                    isPlaying = true;
-                    io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+                if (room.currentSongIndex > 0) {
+                    room.currentSongIndex--;
+                    room.isPlaying = true;
+                    io.to(roomId).emit('change_song', { index: room.currentSongIndex, videoId: room.playlist[room.currentSongIndex].id });
                 }
                 break;
         }
     });
 
     socket.on('seek', (time) => {
-        io.emit('sync_seek', time);
+        const roomId = socket.data.roomId;
+        if(roomId) io.to(roomId).emit('sync_seek', time);
     });
 
     socket.on('play_specific', (index) => {
-        if (index >= 0 && index < playlist.length) {
-            currentSongIndex = index;
-            isPlaying = true;
-            io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+        const roomId = socket.data.roomId;
+        const room = rooms[roomId];
+        if (!room) return;
+
+        if (index >= 0 && index < room.playlist.length) {
+            room.currentSongIndex = index;
+            room.isPlaying = true;
+            io.to(roomId).emit('change_song', { index: room.currentSongIndex, videoId: room.playlist[room.currentSongIndex].id });
         }
     });
 
     socket.on('edit_list', (data) => {
+        const roomId = socket.data.roomId;
+        const room = rooms[roomId];
+        if (!room) return;
+
         const { action, index } = data;
         if (action === 'delete') {
-            playlist.splice(index, 1);
-            if (index < currentSongIndex) currentSongIndex--;
-            if (index === currentSongIndex) {
-                isPlaying = false;
-                io.emit('sync_action', { type: 'stop' });
+            room.playlist.splice(index, 1);
+            if (index < room.currentSongIndex) room.currentSongIndex--;
+            if (index === room.currentSongIndex) {
+                room.isPlaying = false;
+                io.to(roomId).emit('sync_action', { type: 'stop' });
             }
         } else if (action === 'up' && index > 0) {
-            [playlist[index], playlist[index-1]] = [playlist[index-1], playlist[index]];
-            if (currentSongIndex === index) currentSongIndex--;
-            else if (currentSongIndex === index - 1) currentSongIndex++;
-        } else if (action === 'down' && index < playlist.length - 1) {
-            [playlist[index], playlist[index+1]] = [playlist[index+1], playlist[index]];
-            if (currentSongIndex === index) currentSongIndex++;
-            else if (currentSongIndex === index + 1) currentSongIndex--;
+            [room.playlist[index], room.playlist[index-1]] = [room.playlist[index-1], room.playlist[index]];
+            if (room.currentSongIndex === index) room.currentSongIndex--;
+            else if (room.currentSongIndex === index - 1) room.currentSongIndex++;
+        } else if (action === 'down' && index < room.playlist.length - 1) {
+            [room.playlist[index], room.playlist[index+1]] = [room.playlist[index+1], room.playlist[index]];
+            if (room.currentSongIndex === index) room.currentSongIndex++;
+            else if (room.currentSongIndex === index + 1) room.currentSongIndex--;
         }
-        io.emit('update_playlist', playlist);
-        io.emit('update_index', currentSongIndex);
+        io.to(roomId).emit('update_playlist', room.playlist);
+        io.to(roomId).emit('update_index', room.currentSongIndex);
     });
 
     socket.on('song_ended', () => {
-        playNextSong(); // ★ロジックを共通関数化
+        const roomId = socket.data.roomId;
+        if(roomId) playNextSong(roomId);
     });
 });
 
-// ★追加: 次の曲を決めるロジック（シャッフル・ループ対応）
-function playNextSong() {
-    if (playlist.length === 0) return;
+// 次の曲ロジック（部屋ごとのデータを参照するように変更）
+function playNextSong(roomId) {
+    const room = rooms[roomId];
+    if (!room || room.playlist.length === 0) return;
 
-    if (isShuffle) {
-        // シャッフルON: ランダムな曲を選ぶ（なるべく今の曲以外）
+    if (room.isShuffle) {
         let nextIndex;
-        if (playlist.length > 1) {
+        if (room.playlist.length > 1) {
             do {
-                nextIndex = Math.floor(Math.random() * playlist.length);
-            } while (nextIndex === currentSongIndex);
+                nextIndex = Math.floor(Math.random() * room.playlist.length);
+            } while (nextIndex === room.currentSongIndex);
         } else {
             nextIndex = 0;
         }
-        currentSongIndex = nextIndex;
-        isPlaying = true;
-        io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+        room.currentSongIndex = nextIndex;
+        room.isPlaying = true;
+        io.to(roomId).emit('change_song', { index: room.currentSongIndex, videoId: room.playlist[room.currentSongIndex].id });
     } else {
-        // 通常モード
-        if (currentSongIndex + 1 < playlist.length) {
-            // 次の曲へ
-            currentSongIndex++;
-            isPlaying = true;
-            io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+        if (room.currentSongIndex + 1 < room.playlist.length) {
+            room.currentSongIndex++;
+            room.isPlaying = true;
+            io.to(roomId).emit('change_song', { index: room.currentSongIndex, videoId: room.playlist[room.currentSongIndex].id });
         } else {
-            // 最後の曲が終わった時
-            if (isLoop) {
-                // ループON: 最初に戻る
-                currentSongIndex = 0;
-                isPlaying = true;
-                io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+            if (room.isLoop) {
+                room.currentSongIndex = 0;
+                room.isPlaying = true;
+                io.to(roomId).emit('change_song', { index: room.currentSongIndex, videoId: room.playlist[room.currentSongIndex].id });
             } else {
-                // ループOFF: 停止
-                isPlaying = false;
-                io.emit('sync_action', { type: 'stop' });
+                room.isPlaying = false;
+                io.to(roomId).emit('sync_action', { type: 'stop' });
             }
         }
     }
