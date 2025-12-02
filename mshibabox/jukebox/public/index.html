@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JukeBox</title>
+    <style>
+        :root { --bg: #121212; --accent: #1DB954; --text: #FFF; }
+        body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        header { padding: 15px; text-align: center; background: rgba(18,18,18,0.95); border-bottom: 1px solid #333; font-weight: bold; }
+        #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; }
+        #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+        .song { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #282828; }
+        .song img { width: 50px; height: 38px; object-fit: cover; margin-right: 15px; border-radius: 4px; }
+        .active { color: var(--accent); }
+        #controls { position: fixed; bottom: 0; width: 100%; background: #181818; padding: 15px; display: flex; gap: 10px; border-top: 1px solid #333; }
+        input { flex: 1; background: #333; border: none; padding: 12px; border-radius: 20px; color: #fff; }
+        button { background: var(--accent); border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<header>🎵 ShibaTON Jukebox</header>
+<div id="player-area"><div id="player"></div></div>
+<div id="list-area"><div id="playlist"></div></div>
+<div id="controls">
+    <input type="text" id="urlInput" placeholder="YouTube URLを貼り付け">
+    <button onclick="add()">追加</button>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let player, isReady = false;
+    const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(tag);
+    function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+            playerVars: { 'playsinline': 1, 'controls': 1 },
+            events: { 'onReady': () => isReady=true, 'onStateChange': e => { if(e.data===0) socket.emit('song_ended'); } }
+        });
+    }
+    function add() {
+        let vId = '', url = document.getElementById('urlInput').value;
+        if(url.includes('v=')) vId = url.split('v=')[1].split('&')[0];
+        else if(url.includes('youtu.be/')) vId = url.split('youtu.be/')[1].split('?')[0];
+        if(vId) { socket.emit('add_song', vId); document.getElementById('urlInput').value = ''; document.getElementById('urlInput').blur(); }
+    }
+    socket.on('init_state', d => { render(d.playlist, d.currentSongIndex); if(d.isPlaying) sync(d.playlist[d.currentSongIndex].id, d.elapsedTime); });
+    socket.on('update_playlist', l => render(l));
+    socket.on('play_song', d => { if(isReady) player.loadVideoById(d.videoId); render(null, d.index); });
+    socket.on('stop_player', () => { if(isReady) player.stopVideo(); });
+    function sync(id, t) { const i = setInterval(() => { if(isReady) { player.loadVideoById(id, t); clearInterval(i); } }, 100); }
+    function render(list, activeIdx) {
+        if(list) {
+            document.getElementById('playlist').innerHTML = list.map((s, i) => 
+                `<div class="song ${i === activeIdx ? 'active' : ''}" id="s-${i}">
+                    <img src="https://img.youtube.com/vi/${s.id}/mqdefault.jpg">
+                    <div>Track ${i+1}</div>
+                </div>`
+            ).join('');
+        }
+        if(activeIdx >= 0) {
+            document.querySelectorAll('.song').forEach(e => e.classList.remove('active'));
+            const el = document.getElementById(`s-${activeIdx}`);
+            if(el) { el.classList.add('active'); el.scrollIntoView({behavior:'smooth', block:'center'}); }
+        }
+    }
+</script>
+</body>
+</html>
