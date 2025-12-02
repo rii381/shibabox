@@ -9,30 +9,40 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// データ管理（曲リスト）
+// データ管理
 let playlist = []; 
 let currentSongIndex = 0;
 let isPlaying = false;
+// ★追加: モード管理
+let isLoop = false;
+let isShuffle = false;
 
 io.on('connection', (socket) => {
-    // 接続時に現在の状態を送信
+    // 接続時に現在の状態を送信（モード情報も追加）
     socket.emit('init_state', {
         playlist,
         currentSongIndex,
-        isPlaying
+        isPlaying,
+        isLoop,
+        isShuffle
     });
 
-    // 曲の追加（曲名・ユーザー名も一緒に保存）
+    // 曲の追加
     socket.on('add_song', (data) => {
-        // dataの中身: { id: '...', title: '曲名', user: 'ユーザー名' }
         playlist.push(data);
         io.emit('update_playlist', playlist);
-        
-        // もしリストが空だったなら、追加された曲をセット
         if (playlist.length === 1) {
             currentSongIndex = 0;
             io.emit('change_song', { index: 0, videoId: playlist[0].id });
         }
+    });
+
+    // ★追加: モード切替
+    socket.on('toggle_mode', (mode) => {
+        if (mode === 'loop') isLoop = !isLoop;
+        if (mode === 'shuffle') isShuffle = !isShuffle;
+        // 全員に新しい状態を通知
+        io.emit('mode_update', { isLoop, isShuffle });
     });
 
     // 再生・停止・スキップ操作
@@ -47,11 +57,7 @@ io.on('connection', (socket) => {
                 io.emit('sync_action', { type: 'pause' });
                 break;
             case 'next':
-                if (currentSongIndex + 1 < playlist.length) {
-                    currentSongIndex++;
-                    isPlaying = true;
-                    io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
-                }
+                playNextSong(); // ★ロジックを共通関数化
                 break;
             case 'prev':
                 if (currentSongIndex > 0) {
@@ -63,7 +69,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    // リストの曲をタップして再生
+    socket.on('seek', (time) => {
+        io.emit('sync_seek', time);
+    });
+
     socket.on('play_specific', (index) => {
         if (index >= 0 && index < playlist.length) {
             currentSongIndex = index;
@@ -72,15 +81,11 @@ io.on('connection', (socket) => {
         }
     });
 
-    // リスト編集（並べ替え・削除）
     socket.on('edit_list', (data) => {
         const { action, index } = data;
-        
         if (action === 'delete') {
             playlist.splice(index, 1);
-            // 再生中の曲より前を消したらインデックスをずらす
             if (index < currentSongIndex) currentSongIndex--;
-            // 再生中の曲そのものを消したら止める
             if (index === currentSongIndex) {
                 isPlaying = false;
                 io.emit('sync_action', { type: 'stop' });
@@ -94,23 +99,54 @@ io.on('connection', (socket) => {
             if (currentSongIndex === index) currentSongIndex++;
             else if (currentSongIndex === index + 1) currentSongIndex--;
         }
-        
         io.emit('update_playlist', playlist);
         io.emit('update_index', currentSongIndex);
     });
 
-    // 曲が終わったとき
     socket.on('song_ended', () => {
+        playNextSong(); // ★ロジックを共通関数化
+    });
+});
+
+// ★追加: 次の曲を決めるロジック（シャッフル・ループ対応）
+function playNextSong() {
+    if (playlist.length === 0) return;
+
+    if (isShuffle) {
+        // シャッフルON: ランダムな曲を選ぶ（なるべく今の曲以外）
+        let nextIndex;
+        if (playlist.length > 1) {
+            do {
+                nextIndex = Math.floor(Math.random() * playlist.length);
+            } while (nextIndex === currentSongIndex);
+        } else {
+            nextIndex = 0;
+        }
+        currentSongIndex = nextIndex;
+        isPlaying = true;
+        io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+    } else {
+        // 通常モード
         if (currentSongIndex + 1 < playlist.length) {
+            // 次の曲へ
             currentSongIndex++;
             isPlaying = true;
             io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
         } else {
-            isPlaying = false;
-            io.emit('sync_action', { type: 'stop' });
+            // 最後の曲が終わった時
+            if (isLoop) {
+                // ループON: 最初に戻る
+                currentSongIndex = 0;
+                isPlaying = true;
+                io.emit('change_song', { index: currentSongIndex, videoId: playlist[currentSongIndex].id });
+            } else {
+                // ループOFF: 停止
+                isPlaying = false;
+                io.emit('sync_action', { type: 'stop' });
+            }
         }
-    });
-});
+    }
+}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
