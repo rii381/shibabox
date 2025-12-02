@@ -8,16 +8,16 @@
     :root { --bg: #121212; --accent: #1DB954; --text: #FFF; }
     body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
     
-    /* 共通オーバーレイスタイル */
+    /* 共通オーバーレイ */
     .overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: #000; z-index: 10000;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        text-align: center;
-        padding: 20px;
+        text-align: center; padding: 20px;
     }
-    .overlay h2 { margin-bottom: 20px; font-size: 24px; color: var(--accent); }
-    .overlay p { margin-bottom: 30px; color: #aaa; font-size: 14px; }
+    .overlay h2 { margin-bottom: 10px; font-size: 24px; color: var(--accent); }
+    .overlay .room-id { font-size: 32px; font-weight: bold; margin-bottom: 20px; color: white; letter-spacing: 2px; }
+    .overlay p { margin-bottom: 20px; color: #aaa; font-size: 14px; }
     
     .overlay input {
         width: 100%; max-width: 250px; padding: 15px; font-size: 16px;
@@ -27,11 +27,31 @@
     .overlay button {
         padding: 15px 50px; font-size: 18px; border-radius: 50px;
         background: var(--accent); border: none; font-weight: bold; cursor: pointer;
-        color: white; box-shadow: 0 0 15px rgba(29, 185, 84, 0.4);
+        color: white; box-shadow: 0 0 15px rgba(29, 185, 84, 0.4); margin-bottom: 15px;
     }
     
-    /* プレイヤー周り（既存デザイン） */
-    header { text-align:center; padding:10px; font-weight:bold; font-size:12px; color:#666; letter-spacing: 1px; }
+    /* ★追加：オーバーレイ内の共有ボタン（少し小さめ） */
+    .btn-share-sub {
+        background: transparent !important; border: 1px solid #555 !important;
+        box-shadow: none !important; color: #ccc !important; font-size: 14px !important;
+        padding: 10px 20px !important; display: flex; align-items: center; gap: 5px;
+    }
+
+    /* ヘッダー周り */
+    header { 
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 10px 15px; background: #121212; border-bottom: 1px solid #222;
+    }
+    .header-logo { font-weight:bold; font-size:14px; color:#aaa; letter-spacing: 1px; }
+    .header-room { color: var(--accent); margin-left: 5px; }
+    
+    /* ★追加：ヘッダーの共有ボタン */
+    .btn-share-header {
+        background: #333; color: white; border: none; padding: 5px 12px;
+        border-radius: 15px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;
+    }
+
+    /* プレイヤー */
     #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; }
     #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
@@ -74,18 +94,28 @@
 <div id="room-create-overlay" class="overlay" style="display:none;">
     <h2>shibabox</h2>
     <p>好きな部屋の名前を決めてください</p>
-    <input type="text" id="room-name-input" placeholder="例: drive, party, shiba">
+    <input type="text" id="room-name-input" placeholder="例: drive, party">
     <button onclick="createRoom()">部屋を作る</button>
 </div>
 
 <div id="join-overlay" class="overlay" style="display:none;">
-    <h2 id="room-title-display">Room: ???</h2>
-    <p>あなたの名前を教えてください</p>
+    <h2>ROOM</h2>
+    <div id="room-title-display" class="room-id">???</div>
+    
+    <button class="btn-share-sub" onclick="shareUrl()">🔗 URLを友達に送る</button>
+    
+    <p style="margin-top:20px;">あなたの名前を教えてください</p>
     <input type="text" id="username-input" placeholder="例: shibaton">
     <button onclick="joinRoom()">参加する</button>
 </div>
 
-<header id="header-title">🎵 shibabox</header>
+<header>
+    <div>
+        <span class="header-logo">🎵 shibabox</span>
+        <span id="header-room-name" class="header-room"></span>
+    </div>
+    <button class="btn-share-header" onclick="shareUrl()">🔗 招待</button>
+</header>
 
 <div id="player-area"><div id="player"></div></div>
 
@@ -120,41 +150,60 @@
     let isDragging = false;
     let lastState = { isPlaying: false, playlist: [] };
 
-    // --- 初期化処理 ---
     window.onload = function() {
-        // URLから部屋名を取得 (例: shibabox.com/drive -> 'drive')
-        const path = window.location.pathname.substring(1); // 先頭の / を取る
+        const path = window.location.pathname.substring(1);
         
         if (path) {
-            // 部屋名がある場合 -> 参加画面を表示
-            currentRoomId = path; // 日本語URL対策にdecodeURIしても良いがシンプルに
-            document.getElementById('room-title-display').innerText = `Room: ${currentRoomId}`;
-            document.getElementById('header-title').innerText = `🎵 shibabox / ${currentRoomId}`;
+            currentRoomId = decodeURIComponent(path);
+            document.getElementById('room-title-display').innerText = currentRoomId;
+            document.getElementById('header-room-name').innerText = "/ " + currentRoomId;
             
-            // 名前が保存されていれば自動入力
             const storedName = localStorage.getItem('shiba_username');
             if(storedName) document.getElementById('username-input').value = storedName;
             
             document.getElementById('join-overlay').style.display = 'flex';
         } else {
-            // 部屋名がない場合 -> 作成画面を表示
             document.getElementById('room-create-overlay').style.display = 'flex';
         }
     };
 
-    // 部屋を作る（URLを変えてリダイレクト）
     function createRoom() {
         const input = document.getElementById('room-name-input');
         const roomName = input.value.trim();
         if(roomName) {
-            // 画面遷移
-            window.location.href = '/' + roomName;
+            window.location.href = '/' + encodeURIComponent(roomName);
         } else {
             alert('部屋名を入力してください');
         }
     }
 
-    // 部屋に参加する（サーバーに接続）
+    // ★追加：URL共有機能
+    async function shareUrl() {
+        const url = window.location.href;
+        const shareData = {
+            title: 'shibabox',
+            text: `shibaboxの部屋「${currentRoomId}」に招待されました！`,
+            url: url,
+        };
+
+        // スマホの共有メニューが使えるかチェック
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                console.log('シェアがキャンセルされました');
+            }
+        } else {
+            // PCなどはクリップボードにコピー
+            try {
+                await navigator.clipboard.writeText(url);
+                alert('URLをコピーしました！\n' + url);
+            } catch (err) {
+                alert('URL: ' + url);
+            }
+        }
+    }
+
     function joinRoom() {
         const input = document.getElementById('username-input');
         const name = input.value.trim();
@@ -164,16 +213,13 @@
         localStorage.setItem('shiba_username', name);
         document.getElementById('join-overlay').style.display = 'none';
 
-        // ★ここで初めてサーバーに「この部屋に入るよ」と伝える
         socket.emit('join_room', currentRoomId);
 
-        // プレイヤー準備OKなら再生開始のチャンス
         if(player && isReady && lastState.isPlaying && lastState.playlist.length > 0) {
             player.playVideo();
         }
     }
 
-    // --- YouTube API ---
     const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
     document.body.appendChild(tag);
 
@@ -216,7 +262,6 @@
         socket.emit('seek', e.target.value);
     });
 
-    // --- 操作 ---
     async function add() {
         if(!myName) return;
         const input = document.getElementById('urlInput');
@@ -250,7 +295,6 @@
     function editList(action, index) { socket.emit('edit_list', { action, index }); }
     function playSpecific(index) { socket.emit('play_specific', index); }
 
-    // --- 受信 ---
     socket.on('init_state', d => {
         lastState = d;
         renderList(d.playlist);
