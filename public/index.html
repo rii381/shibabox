@@ -8,15 +8,15 @@
     :root { --bg: #121212; --accent: #1DB954; --text: #FFF; }
     body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
     
-    /* 共通オーバーレイ */
+    /* オーバーレイ（共通） */
     .overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: #000; z-index: 10000;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        text-align: center; padding: 20px;
+        text-align: center; padding: 20px; box-sizing: border-box; /* 修正: パディングを含める */
     }
     .overlay h2 { margin-bottom: 10px; font-size: 24px; color: var(--accent); }
-    .overlay .room-id { font-size: 32px; font-weight: bold; margin-bottom: 20px; color: white; letter-spacing: 2px; }
+    .overlay .room-id { font-size: 32px; font-weight: bold; margin-bottom: 20px; color: white; letter-spacing: 2px; word-break: break-all; }
     .overlay p { margin-bottom: 20px; color: #aaa; font-size: 14px; }
     
     .overlay input {
@@ -30,38 +30,56 @@
         color: white; box-shadow: 0 0 15px rgba(29, 185, 84, 0.4); margin-bottom: 15px;
     }
     
-    /* ★追加：オーバーレイ内の共有ボタン（少し小さめ） */
     .btn-share-sub {
         background: transparent !important; border: 1px solid #555 !important;
         box-shadow: none !important; color: #ccc !important; font-size: 14px !important;
         padding: 10px 20px !important; display: flex; align-items: center; gap: 5px;
     }
 
-    /* ヘッダー周り */
+    /* ★修正：ヘッダー周り（崩れ防止） */
     header { 
         display: flex; justify-content: space-between; align-items: center;
         padding: 10px 15px; background: #121212; border-bottom: 1px solid #222;
+        flex-shrink: 0; /* 潰れないようにする */
+        z-index: 500; /* 他の要素より手前に表示 */
+        position: relative;
+        height: 50px; /* 高さ固定 */
+        box-sizing: border-box;
     }
-    .header-logo { font-weight:bold; font-size:14px; color:#aaa; letter-spacing: 1px; }
-    .header-room { color: var(--accent); margin-left: 5px; }
     
-    /* ★追加：ヘッダーの共有ボタン */
+    .header-left {
+        display: flex; align-items: center; 
+        overflow: hidden; /* 長すぎる文字は隠す */
+        white-space: nowrap;
+        margin-right: 10px;
+    }
+    
+    .header-logo { font-weight:bold; font-size:14px; color:#aaa; letter-spacing: 1px; flex-shrink: 0; }
+    .header-room { 
+        color: var(--accent); margin-left: 5px; 
+        overflow: hidden; text-overflow: ellipsis; /* 長すぎたら...にする */
+    }
+    
+    /* ★修正：共有ボタンが消えないようにする */
     .btn-share-header {
         background: #333; color: white; border: none; padding: 5px 12px;
-        border-radius: 15px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;
+        border-radius: 15px; font-size: 12px; cursor: pointer; 
+        display: flex; align-items: center; gap: 4px;
+        flex-shrink: 0; /* 画面が狭くても絶対に縮めない */
+        white-space: nowrap;
     }
 
     /* プレイヤー */
-    #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; }
+    #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; z-index: 10;}
     #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-    .progress-container { padding: 10px 20px 0 20px; background: #181818; display: flex; flex-direction: column; gap: 5px; }
+    .progress-container { padding: 10px 20px 0 20px; background: #181818; display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
     input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
     input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #555; border-radius: 2px; }
     input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: var(--accent); margin-top: -4px; }
     .time-display { display: flex; justify-content: space-between; font-size: 11px; color: #b3b3b3; font-variant-numeric: tabular-nums; }
 
-    .controls-main { display: flex; justify-content: space-between; align-items: center; padding: 5px 20px 15px 20px; background: #181818; border-bottom: 1px solid #333; }
+    .controls-main { display: flex; justify-content: space-between; align-items: center; padding: 5px 20px 15px 20px; background: #181818; border-bottom: 1px solid #333; flex-shrink: 0; }
     .ctrl-group { display: flex; align-items: center; gap: 20px; }
     .btn-ctrl { background: none; border: none; color: white; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .play-btn { background: white; color: black; font-size: 24px; width: 60px; height: 60px; border-radius: 50%; }
@@ -69,22 +87,22 @@
     .btn-mode.active-mode { color: var(--accent); text-shadow: 0 0 10px rgba(29, 185, 84, 0.4); }
     .btn-mode.active-mode::after { content: ''; position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background-color: var(--accent); border-radius: 50%; }
 
-    #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+    #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; position: relative; z-index: 5; }
     .song { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #282828; background: var(--bg); transition: background 0.2s; }
     .song.active { background: #1a1a1a; border-left: 4px solid var(--accent); }
     .song.active .title { color: var(--accent); font-weight: bold; }
-    .thumb { width: 50px; height: 38px; object-fit: cover; margin-right: 12px; border-radius: 4px; }
+    .thumb { width: 50px; height: 38px; object-fit: cover; margin-right: 12px; border-radius: 4px; flex-shrink: 0; }
     .info { flex: 1; overflow: hidden; cursor: pointer; padding: 5px 0; }
     .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .artist { font-size: 11px; color: #b3b3b3; margin-top: 4px; display: flex; align-items: center; gap: 5px;}
-    .user-badge { background: #333; padding: 2px 6px; border-radius: 4px; color: #aaa; font-size: 10px; }
-    .actions { display: flex; gap: 8px; margin-left: 10px; }
+    .user-badge { background: #333; padding: 2px 6px; border-radius: 4px; color: #aaa; font-size: 10px; flex-shrink: 0; }
+    .actions { display: flex; gap: 8px; margin-left: 10px; flex-shrink: 0; }
     .btn-sm { background: #333; border: none; color: #ccc; width: 32px; height: 32px; border-radius: 4px; font-size: 14px; cursor: pointer; }
     .btn-del { color: #ff5555; background: #332222; }
     
-    #add-bar { position: fixed; bottom: 0; width: 100%; background: #181818; padding: 15px; display: flex; gap: 10px; border-top: 1px solid #333; z-index: 100; }
-    #urlInput { flex: 1; background: #333; border: none; padding: 12px; border-radius: 20px; color: #fff; outline: none; }
-    .btn-add { background: var(--accent); border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+    #add-bar { position: fixed; bottom: 0; width: 100%; background: #181818; padding: 15px; display: flex; gap: 10px; border-top: 1px solid #333; z-index: 100; box-sizing: border-box; }
+    #urlInput { flex: 1; background: #333; border: none; padding: 12px; border-radius: 20px; color: #fff; outline: none; min-width: 0; }
+    .btn-add { background: var(--accent); border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
     .btn-add:disabled { background: #555; cursor: wait; }
 
 </style>
@@ -110,7 +128,7 @@
 </div>
 
 <header>
-    <div>
+    <div class="header-left">
         <span class="header-logo">🎵 shibabox</span>
         <span id="header-room-name" class="header-room"></span>
     </div>
@@ -151,10 +169,15 @@
     let lastState = { isPlaying: false, playlist: [] };
 
     window.onload = function() {
-        const path = window.location.pathname.substring(1);
+        // 末尾の/を削除して取得
+        let path = window.location.pathname;
+        if (path.endsWith('/')) {
+             path = path.slice(0, -1);
+        }
+        const roomId = path.substring(1); // 先頭の / を取る
         
-        if (path) {
-            currentRoomId = decodeURIComponent(path);
+        if (roomId) {
+            currentRoomId = decodeURIComponent(roomId);
             document.getElementById('room-title-display').innerText = currentRoomId;
             document.getElementById('header-room-name').innerText = "/ " + currentRoomId;
             
@@ -177,7 +200,6 @@
         }
     }
 
-    // ★追加：URL共有機能
     async function shareUrl() {
         const url = window.location.href;
         const shareData = {
@@ -186,15 +208,9 @@
             url: url,
         };
 
-        // スマホの共有メニューが使えるかチェック
         if (navigator.share) {
-            try {
-                await navigator.share(shareData);
-            } catch (err) {
-                console.log('シェアがキャンセルされました');
-            }
+            try { await navigator.share(shareData); } catch (err) {}
         } else {
-            // PCなどはクリップボードにコピー
             try {
                 await navigator.clipboard.writeText(url);
                 alert('URLをコピーしました！\n' + url);
