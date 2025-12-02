@@ -3,45 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ShibaTON Jukebox</title>
+<title>shibabox</title>
 <style>
     :root { --bg: #121212; --accent: #1DB954; --text: #FFF; --gray: #282828; }
     body { margin:0; font-family: sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
     
+    /* 名前入力画面（モーダル） */
+    #name-modal {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.95); z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    #name-modal h2 { color: white; margin-bottom: 20px; font-size: 18px; }
+    #name-modal input {
+        width: 80%; max-width: 300px; padding: 15px; font-size: 16px;
+        border: 2px solid var(--accent); border-radius: 30px;
+        background: #333; color: white; text-align: center; margin-bottom: 20px; outline: none;
+    }
+    #name-modal button {
+        padding: 12px 40px; font-size: 16px; border-radius: 30px;
+        background: var(--accent); border: none; font-weight: bold; cursor: pointer;
+    }
+
     /* プレイヤー */
     #player-area { width: 100%; background: #000; position: relative; padding-top: 56.25%; flex-shrink: 0; }
     #player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
     
-    /* コントロールパネル */
+    /* 操作ボタン */
     .controls-main { display: flex; justify-content: center; gap: 30px; align-items: center; padding: 15px; background: #181818; border-bottom: 1px solid #333; }
     .btn-ctrl { background: none; border: none; color: white; font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .btn-ctrl:active { opacity: 0.7; }
     .play-btn { background: white; color: black; font-size: 24px; width: 60px; height: 60px; border-radius: 50%; }
 
-    /* リスト */
+    /* リストエリア */
     #list-area { flex: 1; overflow-y: auto; padding-bottom: 80px; }
-    .song { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #282828; background: var(--bg); }
+    
+    .song { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #282828; background: var(--bg); transition: background 0.2s; }
     .song.active { background: #1a1a1a; border-left: 4px solid var(--accent); }
     .song.active .title { color: var(--accent); font-weight: bold; }
     
     .thumb { width: 50px; height: 38px; object-fit: cover; margin-right: 12px; border-radius: 4px; }
-    .info { flex: 1; overflow: hidden; }
-    .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     
-    .actions { display: flex; gap: 8px; }
+    /* 曲情報（ここをタップで再生） */
+    .info { flex: 1; overflow: hidden; cursor: pointer; padding: 5px 0; }
+    .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .artist { font-size: 11px; color: #b3b3b3; margin-top: 4px; display: flex; align-items: center; gap: 5px;}
+    .user-badge { background: #333; padding: 2px 6px; border-radius: 4px; color: #aaa; font-size: 10px; }
+
+    /* 編集ボタン */
+    .actions { display: flex; gap: 8px; margin-left: 10px; }
     .btn-sm { background: #333; border: none; color: #ccc; width: 32px; height: 32px; border-radius: 4px; font-size: 14px; cursor: pointer; }
     .btn-del { color: #ff5555; background: #332222; }
     
     /* 追加バー */
     #add-bar { position: fixed; bottom: 0; width: 100%; background: #181818; padding: 15px; display: flex; gap: 10px; border-top: 1px solid #333; z-index: 100; }
-    input { flex: 1; background: #333; border: none; padding: 12px; border-radius: 20px; color: #fff; outline: none; }
-    .btn-add { background: var(--accent); border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+    #urlInput { flex: 1; background: #333; border: none; padding: 12px; border-radius: 20px; color: #fff; outline: none; }
+    .btn-add { background: var(--accent); border: none; padding: 0 20px; border-radius: 20px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+    .btn-add:disabled { background: #555; cursor: wait; }
 
 </style>
 </head>
 <body>
 
-<header style="text-align:center; padding:10px; font-weight:bold; font-size:12px; color:#666;">ShibaTON Jukebox</header>
+<div id="name-modal">
+    <h2>名前を教えてください</h2>
+    <input type="text" id="username-input" placeholder="例: shibaton">
+    <button onclick="saveName()">スタート！</button>
+</div>
+
+<header style="text-align:center; padding:10px; font-weight:bold; font-size:12px; color:#666; letter-spacing: 1px;">🎵 shibabox</header>
 
 <div id="player-area"><div id="player"></div></div>
 
@@ -54,14 +84,33 @@
 <div id="list-area"><div id="playlist"></div></div>
 
 <div id="add-bar">
-    <input type="text" id="urlInput" placeholder="YouTube URLを貼り付け">
-    <button class="btn-add" onclick="add()">追加</button>
+    <input type="text" id="urlInput" placeholder="URLを貼り付け">
+    <button class="btn-add" id="addBtn" onclick="add()">追加</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
     let player, isReady = false;
+    let myName = '';
+
+    // --- 名前保存の処理 ---
+    const storedName = localStorage.getItem('shiba_username');
+    if(storedName) {
+        document.getElementById('username-input').value = storedName;
+    }
+    
+    function saveName() {
+        const input = document.getElementById('username-input');
+        const name = input.value.trim();
+        if(name) {
+            myName = name;
+            localStorage.setItem('shiba_username', name);
+            document.getElementById('name-modal').style.display = 'none';
+        } else {
+            alert('名前を入力してください！');
+        }
+    }
 
     // YouTube API
     const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
@@ -81,12 +130,44 @@
         if(e.data === 0) socket.emit('song_ended');
     }
 
-    // 操作
-    function add() {
-        let vId = '', url = document.getElementById('urlInput').value;
+    // --- 曲追加（ここでタイトルを取得します） ---
+    async function add() {
+        if(!myName) {
+            alert("エラー: 名前が設定されていません。ページを再読み込みしてください。");
+            return;
+        }
+
+        const input = document.getElementById('urlInput');
+        const btn = document.getElementById('addBtn');
+        const url = input.value;
+        let vId = '';
+
         if(url.includes('v=')) vId = url.split('v=')[1].split('&')[0];
         else if(url.includes('youtu.be/')) vId = url.split('youtu.be/')[1].split('?')[0];
-        if(vId) { socket.emit('add_song', vId); document.getElementById('urlInput').value = ''; document.getElementById('urlInput').blur(); }
+
+        if(vId) { 
+            btn.disabled = true;
+            btn.innerText = "取得中...";
+            try {
+                // 曲名を取得するAPIを使用
+                const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vId}`);
+                const data = await response.json();
+                
+                // 取得できたらそのタイトル、失敗したらIDを表示
+                const title = data.title || `Track (${vId})`;
+                
+                // サーバーへ送信（ID, タイトル, ユーザー名）
+                socket.emit('add_song', { id: vId, title: title, user: myName });
+                input.value = '';
+                input.blur();
+            } catch (e) {
+                // 通信エラーなどの場合も最低限のデータで追加
+                socket.emit('add_song', { id: vId, title: `Track (${vId})`, user: myName });
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "追加";
+            }
+        }
     }
 
     function sendCtrl(type) { socket.emit('control', { type }); }
@@ -101,7 +182,12 @@
         socket.emit('edit_list', { action, index });
     }
 
-    // 受信処理
+    // タップして再生
+    function playSpecific(index) {
+        socket.emit('play_specific', index);
+    }
+
+    // --- 画面更新 ---
     socket.on('init_state', d => {
         renderList(d.playlist);
         highlight(d.currentSongIndex);
@@ -133,10 +219,16 @@
 
     function renderList(list) {
         const div = document.getElementById('playlist');
+        // ここでリストの中身（HTML）を作っています
         div.innerHTML = list.map((s, i) => `
             <div class="song" id="s-${i}">
                 <img class="thumb" src="https://img.youtube.com/vi/${s.id}/mqdefault.jpg">
-                <div class="info"><div class="title">Track ${i+1}</div></div>
+                <div class="info" onclick="playSpecific(${i})">
+                    <div class="title">${s.title}</div>
+                    <div class="artist">
+                        <span class="user-badge">${s.user || 'Guest'}</span>
+                    </div>
+                </div>
                 <div class="actions">
                     <button class="btn-sm" onclick="editList('up', ${i})">↑</button>
                     <button class="btn-sm" onclick="editList('down', ${i})">↓</button>
